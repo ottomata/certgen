@@ -6,7 +6,7 @@ import os.path
 import subprocess
 import yaml    # PyYAML (python-yaml)
 
-from .util import mkdirs, run_command, openssl
+from .util import mkdirs, run_command, openssl, get_class_logger
 
 import logging
 
@@ -15,19 +15,14 @@ import logging
 
 
 class Key(object):
-    def __init__(self, name, path, password=None):
+    def __init__(self, name, path, password=None, **kwargs):
         self.name = name
         self.path = os.path.abspath(path)
         self.password = password
         # Private Key file in .pem format
         self.key_file = os.path.join(self.path, '{}.key'.format(self.name))
 
-        # formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-12s %(message)s')
-        # handler = logging.StreamHandler()
-        # handler.setFormatter(formatter)
-        # self.log = logging.getLogger('key.{}'.format(self.name))
-        self.log = logging.getLogger(str(self))
-        # self.log.addHandler(handler)
+        self.log = get_class_logger(self)
 
     def exists(self):
         return os.path.exists(self.key_file)
@@ -52,7 +47,7 @@ class Key(object):
 
 
 class RSAKey(Key):
-    def __init__(self, name, path, password=None, key_size=2048):
+    def __init__(self, name, path, password=None, key_size=2048, **kwargs):
         self.key_size = key_size
         super().__init__(name, path, password)
 
@@ -79,17 +74,14 @@ class RSAKey(Key):
 
         return self.key_file
 
-
     def __repr__(self):
         return '{}(name={}, file={}, size={})'.format(
             self.__class__.__name__, self.name, self.key_file, self.key_size
         )
 
 
-
-
 class ECKey(Key):
-    def __init__(self, name, path, password=None, asn1_oid='prime256v1'):
+    def __init__(self, name, path, password=None, asn1_oid='prime256v1', **kwargs):
         self.asn1_oid = asn1_oid
         super().__init__(name, path, password)
 

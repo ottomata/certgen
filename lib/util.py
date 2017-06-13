@@ -5,6 +5,7 @@ import logging
 import os
 import os.path
 import subprocess
+import tempfile
 import yaml    # PyYAML (python-yaml)
 
 
@@ -16,11 +17,16 @@ keytool = os.getenv('KEYTOOL_BIN', 'keytool')
 def setup_logging(level=logging.DEBUG):
     logging.basicConfig(
         level=level,
-        format='%(asctime)s %(levelname)-8s %(name)-12s %(message)s'
+        format='%(asctime)s %(levelname)-8s %(name)-20s %(message)s'
     )
 
 setup_logging()
 
+
+def get_class_logger(obj):
+    return logging.getLogger('{}({})'.format(
+        obj.__class__.__name__, obj.name
+    ))
 
 def read_manifest(manifest):
     with open(manifest, 'r') as f:
@@ -34,7 +40,7 @@ def run_command(command):
     try:
         logger.debug("Running command: " + " ".join(command))
         output = subprocess.check_output(command, stderr=subprocess.STDOUT)
-        for ln in output.splitlines(): logging.debug(ln)
+        for ln in output.splitlines(): logger.debug(ln)
         logger.debug("command succeeded: %s", " ".join(command))
     except subprocess.CalledProcessError as e:
         for ln in e.output.splitlines(): logging.error(ln)
