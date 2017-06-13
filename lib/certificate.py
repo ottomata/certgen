@@ -67,13 +67,6 @@ subjectAltName             = @alt_names
 
 dns_alt_name_template = 'DNS.{i} = {alt_name}'
 
-# def generate_temp_san_conf_file(dns_alt_names):
-#     san_file = tempfile.NamedTemporaryFile(mode='w')
-#     san_file.write('subjectAltName=DNS:{}'.format(',DNS:'.join(dns_alt_names)))
-#     san_file.flush()
-#     return san_file
-
-
 def render_csr_config(dns_alt_names=None):
     req_extensions = ''
     alt_names = ''
@@ -93,7 +86,7 @@ def render_csr_config(dns_alt_names=None):
 
 class Certificate(object):
     """
-    docstring for Certificate.
+    Represents an OpenSSL certificate.  Handles generation of
     subject is a dict mapping x509 subject  keys to values.
     """
     def __init__(

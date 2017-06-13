@@ -14,25 +14,52 @@ openssl = os.getenv('OPENSSL_BIN', 'openssl')
 keytool = os.getenv('KEYTOOL_BIN', 'keytool')
 
 
-def setup_logging(level=logging.DEBUG):
+def setup_logging(level=None):
+    """
+    Conigures basic logging defaults.
+    If level is not given, but the environment variable LOG_LEVEL
+    is set, it will be used as the level.  Otherwise INFO is the default level.
+
+    :param level
+    """
+    if not level:
+        level = getattr(
+            logging, os.environ.get('LOG_LEVEL', 'INFO')
+        )
+
     logging.basicConfig(
         level=level,
         format='%(asctime)s %(levelname)-8s %(name)-20s %(message)s'
     )
 
+# TODO don't call this from file
 setup_logging()
 
 
-def get_class_logger(obj):
-    return logging.getLogger('{}({})'.format(
-        obj.__class__.__name__, obj.name
-    ))
 
-def read_manifest(manifest):
-    with open(manifest, 'r') as f:
-        return yaml.load(f.read())
+def get_class_logger(obj):
+    """
+    Returns a new logging instance for an class object instance.
+    If the obj instance has a name attribute, it will be included
+    in the logger name.  This is useful for using %(name)s in
+    logging your formatter.
+
+    :param obj an instance of any class
+    """
+    class_name = obj.__class__.__name__
+    if hasattr(obj, 'name'):
+        logger_name = '{}({})'.format(class_name, obj.name)
+    else:
+        logger_name = class_name
+    return logging.getLogger(logger_name)
 
 def run_command(command):
+    """
+    Executes a command in a subshell and logs the output.
+
+    :param command a list of command args to pass to subprocess.check_output
+    :return True if the command exited with 0, else False
+    """
     logger = logging.getLogger('shell')
 
     if isinstance(command, str):
@@ -50,5 +77,10 @@ def run_command(command):
 
 
 def mkdirs(directory):
+    """
+    Equivalent to mkdir -p
+
+    :param directory path
+    """
     if not os.path.exists(directory):
         os.makedirs(directory)

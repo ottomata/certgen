@@ -51,7 +51,9 @@ class SelfSigningCA(CA):
         # certificate.
         if certificate.csr_conf_file:
             # TODO: perhaps somehow parameterize what extensions to use?
-            command += ['-extfile', certificate.csr_conf_file, '-extensions', 'v3_req']
+            command += ['-extfile', certificate.csr_conf_file]
+        if certificate.dns_alt_names:
+            command+= ['-extensions', 'v3_req']
 
         logging.debug('Signing CSR from {} with {}'.format(certificate.csr_file, self))
         if not run_command(command):

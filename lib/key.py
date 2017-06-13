@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
 
-import logging
-import os
+"""
+Classes for OpenSSL private key generation.  Extend the base Key class if you need
+to generate a key of a type not yet supported here.
+"""
+
 import os.path
-import subprocess
-import yaml    # PyYAML (python-yaml)
 
 from .util import mkdirs, run_command, openssl, get_class_logger
 
-import logging
-
-# TODO make this configurable?
-# DefaultKeyClass = RSAKey
-
-
 class Key(object):
+    """
+    Base class for Key objects.  This just sets up common instance variables
+    and includes some convenience methods.
+    """
     def __init__(self, name, path, password=None, **kwargs):
+        """
+        :param name
+        :param path path in which to look for and generate files
+        :param password key password
+        """
+
         self.name = name
         self.path = os.path.abspath(path)
         self.password = password
@@ -25,9 +30,17 @@ class Key(object):
         self.log = get_class_logger(self)
 
     def exists(self):
+        """
+        Checks that this Key exists at the expected key file path.
+        """
         return os.path.exists(self.key_file)
 
     def check_force_generate(self, force):
+        """
+        DRY method for checking if generate should be allowed even if the key file already exists.
+        :param force If True, this returns True
+        :return True or False if generation should be allowed
+        """
         if self.exists() and not force:
             self.log.warn(
                 '{} already exists, skipping key generation...'.format(self.key_file)
@@ -37,6 +50,9 @@ class Key(object):
             return True
 
     def generate(self, force=False):
+        """
+        Implement this method to support generation of your Key subclass.
+        """
         raise NotImplementedError(
             'Cannot generate Key of unknown algorithm type.  Use a subclass.', self
         )
@@ -47,11 +63,23 @@ class Key(object):
 
 
 class RSAKey(Key):
+
     def __init__(self, name, path, password=None, key_size=2048, **kwargs):
+        """
+        Helps with generation of RSA key files.
+        :param name
+        :param path path in which to look for and generate files
+        :param password key password
+        :param key_size RSA key size
+        """
         self.key_size = key_size
         super().__init__(name, path, password)
 
     def generate(self, force=False):
+        """
+        Generates the key file.
+        :param force if True, the key will be re-generated even if the key file exists.
+        """
         if not self.check_force_generate(force):
             return False
 
@@ -62,7 +90,7 @@ class RSAKey(Key):
             command += ['-passout', 'pass:{}'.format(self.password)]
         command += [str(self.key_size)]
 
-        self.log.info('Generating key')
+        self.log.info('Generating RSA key')
         if not run_command(command):
             raise RuntimeError('RSA key generation failed')
 
@@ -72,7 +100,6 @@ class RSAKey(Key):
                 'This should not happen', self
             )
 
-        return self.key_file
 
     def __repr__(self):
         return '{}(name={}, file={}, size={})'.format(
@@ -81,11 +108,22 @@ class RSAKey(Key):
 
 
 class ECKey(Key):
+    """
+    Helps with generation of Eliptic Curve key files.
+    :param name
+    :param path path in which to look for and generate files
+    :param password key password
+    :param asn1_oid
+    """
     def __init__(self, name, path, password=None, asn1_oid='prime256v1', **kwargs):
         self.asn1_oid = asn1_oid
         super().__init__(name, path, password)
 
     def generate(self, force=False):
+        """
+        Generates the key file.
+        :param force if True, the key will be re-generated even if the key file exists.
+        """
         if not self.check_force_generate(force):
             return False
 
@@ -93,12 +131,13 @@ class ECKey(Key):
 
         command = [openssl, 'ecparam', '-genkey', '-name', self.asn1_oid, '-out', self.key_file]
 
-        self.log.info('Generating key')
+        self.log.info('Generating EC key')
         # Generate the keyfile with no password
         if not run_command(command):
             raise RuntimeError('EC key generation failed', self)
 
-        # Now encrypt the key with a password
+        # Now encrypt the key with a password, overwriting the original
+        # passwordless key.
         if self.password:
             command = [
                 openssl, 'ec',
@@ -116,8 +155,6 @@ class ECKey(Key):
                 'Key generation succeeded but key file does not exist. '
                 'This should not happen', self
             )
-
-        return self.key_file
 
     def __repr__(self):
         return '{}(name={}, file={}, asn1_oid={})'.format(
