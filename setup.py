@@ -18,7 +18,7 @@ setup(
         'yamlreader',
     ],
     long_description=long_description,
-    scripts=['./certpy.py'],
+    entry_points={'console_scripts': ['certpy = certpy.main:main']},
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.3',
