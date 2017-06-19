@@ -21,6 +21,7 @@ class SubjectKeyError(KeyError):
 
 # TODO: support long names?  mehhhhhh. use named tuple?? or UserDict
 class Subject(dict):
+    @staticmethod
     def factory(d):
         subject_dict = {k.upper(): v for k,v in d.items()}
         for k in subject_dict.keys():

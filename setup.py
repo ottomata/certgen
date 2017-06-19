@@ -14,12 +14,11 @@ setup(
     author='Andrew Otto',
     packages=find_packages(),
     install_requires=[
-        'docopt'
-        'pyyaml',
+        'docopt',
         'yamlreader',
-    ]
+    ],
     long_description=long_description,
-    scripts=(),
+    scripts=['./certpy.py'],
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.3',
