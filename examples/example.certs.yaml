@@ -1,0 +1,35 @@
+authorities:
+  rootCa:
+    type: SelfSigningCA
+    cert:
+      path: certificates/rootCa
+      subject:
+        C: US
+        ST: CA
+      password: qwerty
+      key:
+        type: RSAKey
+        password: qwerty
+
+certs:
+  hostname1.example.org:
+    path: certificates/hostname1.example.org
+    ca: rootCa
+    subject:
+      C: US
+      ST: CA
+    dns_alt_names: [me.we.you, fine.com]
+    password: qwerty
+    key:
+      type: ECKey
+      password: qwerty
+
+  clientA:
+    path: certificates/clientA
+    ca: rootCa
+    subject:
+      C: US
+      ST: CA
+    password: qwerty
+    key:
+      type: ECKey

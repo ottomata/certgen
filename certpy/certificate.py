@@ -20,6 +20,7 @@ class SubjectKeyError(KeyError):
         ))
 
 # TODO: support long names?  mehhhhhh. use named tuple?? or UserDict
+# TODO: This needs much cleanup.  WIP
 class Subject(dict):
     @staticmethod
     def factory(d):

@@ -74,6 +74,8 @@ def main():
     certificates = loaded_manifest['certificates']
 
 
+    # TODO: implement --working-dir
+
     if args['--generate-authorities']:
         log.info('Generating all authorities declared in {} with force={}'.format(
             args['<manifest_path>'], args['--force'])
