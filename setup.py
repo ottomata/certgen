@@ -7,13 +7,17 @@ except IOError:
     long_description = ''
 
 setup(
-    name='certgen',
+    name='certpy',
     version='0.1.0',
     description='OpenSSL Certificate Manager',
     license='Apache',
     author='Andrew Otto',
     packages=find_packages(),
-    install_requires=[], # TODO: pyyaml, yamlreader
+    install_requires=[
+        'docopt'
+        'pyyaml',
+        'yamlreader',
+    ]
     long_description=long_description,
     scripts=(),
     classifiers=[

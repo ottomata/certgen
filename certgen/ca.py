@@ -9,7 +9,9 @@ If relevant, we also want a CA class to be able to support self generation,
 i.e. a self signing root CA.
 
 As such, a CA subclass class that can used by a Certificate should implement the following
-3 methods: sign, verify, and optionally, generate.
+3 methods: sign, verify, and optionally, generate.  All subclasses must also set
+self.cert to a Certificate instance, even if the Certificate files cannot be
+referenced or generated.  (This is needed for comprehensive status printing.)
 
     '''
     Given a Certificate instance cert, with a existant .csr and .key file,
@@ -66,7 +68,7 @@ class CA(object):
         """
         raise NotImplementedError('__init__ not implemented for ' +  str(self))
 
-    def generate(self):
+    def generate(self, force=False):
         raise NotImplementedError('generate not implemented for ' + str(self))
 
     def sign(self, cert):

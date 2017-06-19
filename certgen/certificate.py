@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from datetime import datetime
 import os
 import logging
 import shutil
@@ -421,7 +422,26 @@ class Certificate(object):
         return True
 
     def __repr__(self):
-        return '{}(name={}, keytype={}, ca={})'.format(
-            self.__class__.__name__, self.name,
-            self.key.__class__.__name__, self.ca.name
-        )
+        if self.ca:
+            return '{}(name={}, keytype={}, ca={})'.format(
+                self.__class__.__name__, self.name,
+                self.key.__class__.__name__, self.ca.name
+            )
+        else:
+            return '{}(name={}, keytype={})'.format(
+                self.__class__.__name__, self.name,
+                self.key.__class__.__name__
+            )
+
+
+    def status_string(self):
+        file_statuses = []
+        for p in [self.key_file, self.crt_file, self.p12_file, self.jks_file]:
+            if os.path.exists(p):
+                mtime = datetime.fromtimestamp(os.path.getmtime(p)).isoformat()
+                file_statuses += ['\t{}: PRESENT (mtime: {})'.format(p, mtime)]
+
+            else:
+                file_statuses += ['\t{}: ABSENT'.format(p)]
+
+        return '{}:\n{}'.format(self, '\n'.join(file_statuses))

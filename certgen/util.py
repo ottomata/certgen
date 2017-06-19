@@ -36,10 +36,6 @@ def setup_logging(level=None):
         format='%(asctime)s %(levelname)-8s %(name)-22s %(message)s'
     )
 
-# TODO don't call this from file
-setup_logging()
-
-
 
 def get_class_logger(obj):
     """

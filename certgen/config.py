@@ -54,10 +54,16 @@ def instantiate_manifest(manifest):
 
     :param manifest manifest of all authority and certificate configs.  CAs, Certificate, and Key
                     classes will all be instantiated based on this configuration and returned.
+                    This can also be a string path to manifests that will be loaded
+                    using load_manifests.
 
     :return dict    of the form { 'authorities': {...}, 'certificates': {...} }, where each
                     declared CA and Certificate will be keyed by name in the appropriate dict.
     """
+
+    if isinstance(manifest, str):
+        manifest = load_manifests(manifest)
+
     authorities = instantiate_authorities(manifest['authorities'])
     certificates = instantiate_certs(manifest['certs'], authorities)
 
@@ -195,15 +201,16 @@ def instantiate(class_name, **kwargs):
     Make sure that the fully qualified class name that you pass is in
     PYTHONPATH.  Example:
 
-        $ tree /usr/local/lib/certgen
-        /usr/local/lib/certgen/
+        $ tree /path/to/certpy_ext
+         /path/to/certpy_ext/
         └── ext
             └── key.py
 
-        $ head -n 1 /usr/local/lib/certgen/ext/key.py
+        $ head -n 2 /path/to/certpy_ext/ext/key.py
+        from certpy import Key
         class DSAKey(Key):
 
-        $ export PYTHONPATH=/usr/local/lib/certgen
+        $ export PYTHONPATH=/path/to/certpy_ext
 
         ...
         instantiate('ext.key.DSAKey')
