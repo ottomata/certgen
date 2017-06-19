@@ -9,6 +9,9 @@ import os.path
 
 from .util import mkdirs, run_command, openssl, get_class_logger
 
+__all__ = ('Key', 'RSAKey', 'ECKey')
+
+
 class Key(object):
     """
     Base class for Key objects.  This just sets up common instance variables

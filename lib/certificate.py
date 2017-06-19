@@ -9,6 +9,9 @@ from .util import openssl, keytool, run_command, mkdirs, get_class_logger, is_in
 
 subject_fields = ['C', 'ST', 'O', 'OU', 'DN', 'CN', 'L', 'SN', 'GN']
 
+__all__ = ('Certificate', 'Subject', 'SubjectKeyError')
+
+
 class SubjectKeyError(KeyError):
     def __init__(self, key):
         super().__init__('{} is not a valid x509 subject field, must be one of {}'.format(

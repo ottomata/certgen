@@ -10,6 +10,8 @@ from .certificate import *
 from .key import *
 from .ca import *
 
+__all__ = ('load_manifests', 'instantiate_manifest') # TODO: validate
+
 # TODO: use relative paths in config???
 
 default_config = {
@@ -19,7 +21,7 @@ default_config = {
 
 log = logging.getLogger('config')
 
-def load_config(config_directory, glob='*.certs.yaml'):
+def load_manifests(path, glob='*.certs.yaml'):
     """
     Given a directory, this will load all files matching config_file_glob
     as YAML and then recursively merge them into a single config hash
@@ -28,48 +30,41 @@ def load_config(config_directory, glob='*.certs.yaml'):
     :param glob default: '*.certs.yaml'
     :return config dict
     """
-    config_directory = os.path.abspath(config_directory)
-    config_path_glob = os.path.join(config_directory, glob)
-    log.info('Loading all config from {}'.format(config_path_glob))
-    return yaml_load(config_path_glob, default_config)
+    path = os.path.abspath(path)
 
-
-def get_class(module_class_name):
-    """
-    Returns module_class_name as a class.  This is useful for instantiating
-    a class by its dotted string name.
-
-    :param module_class_name Fully qualified name, e.g. 'my.module.ClassName'.  This must
-                             either be in globals(), or be importable via importlib.import_module
-
-    :return Class
-    """
-    if module_class_name in globals():
-        return globals()[module_class_name]
-    elif '.' in module_class_name:
-        module_name, class_name = module_class_name.rsplit('.', 1)
-        module = importlib.import_module(module_name)
-        return getattr(module, class_name)
+    # If this is a single file, then no need to use the glob.
+    if os.path.isfile(path):
+        log.info('Loading certificate and authority manifest from {}'.format(path))
+        return yaml_load(path, default_config)
+    # Else it is a directory, probably containing multiple manifest files.
+    # Load any file that matches path glob.
     else:
-        raise RuntimeError(
-            'Cannot dynamically import {}, '
-            'it is not in globals() or importable'.format(module_class_name)
-        )
+        path_glob = os.path.join(path, glob)
+        log.info('Loading all certificate and authority manifests in {}'.format(path_glob))
+        return yaml_load(path_glob, default_config)
 
 
-def instantiate(class_name, **kwargs):
+    # TODO: validate loaded manifest config against jsonschema
+
+
+def instantiate_manifest(manifest):
     """
-    Given a fully qualified module and class name, this returns a new
-    instance of the class with kwargs passed to the constructor.
-
-    :param class_name fully qualified class name
-    :return instance of class
+    Given a certificate maniest dict object (usually loaded from a yaml file), containing
+    definitions of certificates and CAs to manage, instantiate them into objects.
     """
-    return get_class(class_name)(**kwargs)
+    authorities = instantiate_authorities(manifest['authorities'])
+    certificates = instantiate_certs(manifest['certs'], authorities)
+
+    return {
+        'authorities': authorities,
+        'certificates': certificates
+    }
+
 
 
 def instantiate_cert(cert_config, authorities={}):
-
+    """
+    """
     # If we have a special config for this key (that is not the default RSAKey)
     # that Certificate will generate if not given a key, then we need to
     # instantiate a new key now.
@@ -95,9 +90,9 @@ def instantiate_cert(cert_config, authorities={}):
 
     return Certificate(**cert_config)
 
-def instantiate_certs(certs_config, authorities):
+def instantiate_certs(certs_manifest, authorities):
     certs = {}
-    for name, cert_config in certs_config.items():
+    for name, cert_config in certs_manifest.items():
         cert_config['name'] = name
 
         cert = instantiate_cert(cert_config, authorities)
@@ -105,12 +100,11 @@ def instantiate_certs(certs_config, authorities):
     return certs
 
 
-
 #  TODO change param to authority_config
-def instantiate_authorities(authorities_config):
+def instantiate_authorities(authorities_manifest):
     authorities = {}
     # TODO: s/ca_config/authority_config?
-    for name, ca_config in authorities_config.items():
+    for name, ca_config in authorities_manifest.items():
         ca_config['name'] = name
 
         print(ca_config)
@@ -126,18 +120,60 @@ def instantiate_authorities(authorities_config):
 
     return authorities
 
-def instantiate_all(config):
-    authorities = instantiate_authorities(config['authorities'])
-    certificates = instantiate_certs(config['certs'], authorities)
-
-    return {
-        'authorities': authorities,
-        'certificates': certificates
-    }
-
-
-
 
 def validate(config):
     pass
     # TODO: json schema? Maybe!
+
+
+
+def get_class(module_class_name):
+    """
+    Returns module_class_name as a class.  This is useful for instantiating
+    a class by its dotted string name.
+
+    :param module_class_name Fully qualified name, e.g. 'my.module.ClassName'.  This must
+                             either be in globals(), or be importable via importlib.import_module
+
+    :return Class
+    """
+    if module_class_name in globals():
+        return globals()[module_class_name]
+    elif module_class_name in locals():
+        return locals()[module_class_name]
+    elif '.' in module_class_name:
+        module_name, class_name = module_class_name.rsplit('.', 1)
+        module = importlib.import_module(module_name)
+        return getattr(module, class_name)
+    else:
+        raise RuntimeError(
+            'Cannot dynamically import {}, '
+            'it is not in globals() or importable'.format(module_class_name)
+        )
+
+
+def instantiate(class_name, **kwargs):
+    """
+    Given a fully qualified module and class name, this returns a new
+    instance of the class with kwargs passed to the constructor.
+
+    Make sure that the fully qualified class name that you pass is in
+    PYTHONPATH.  Example:
+
+        $ tree /usr/local/lib/certgen
+        /usr/local/lib/certgen/
+        └── ext
+            └── key.py
+
+        $ head -n 1 /usr/local/lib/certgen/ext/key.py
+        class DSAKey(Key):
+
+        $ export PYTHONPATH=/usr/local/lib/certgen
+
+        ...
+        instantiate('ext.key.DSAKey')
+
+    :param class_name fully qualified class name
+    :return instance of class
+    """
+    return get_class(class_name)(**kwargs)

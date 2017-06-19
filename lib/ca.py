@@ -51,6 +51,8 @@ import logging
 import os
 import tempfile
 
+__all__ = ('CA', 'SelfSigningCA', 'PuppetCA')
+
 
 class CA(object):
     """
