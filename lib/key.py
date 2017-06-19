@@ -58,7 +58,7 @@ class Key(object):
         )
 
     def __repr__(self):
-        return '{}(name={}, file={})'.format(self.__class__.__name__, self.name, self.key_file)
+        return '{}({})'.format(self.__class__.__name__, self.name)
 
 
 
@@ -99,12 +99,6 @@ class RSAKey(Key):
                 'Key generation succeeded but key file does not exist. '
                 'This should not happen', self
             )
-
-
-    def __repr__(self):
-        return '{}(name={}, file={}, size={})'.format(
-            self.__class__.__name__, self.name, self.key_file, self.key_size
-        )
 
 
 class ECKey(Key):
@@ -155,8 +149,3 @@ class ECKey(Key):
                 'Key generation succeeded but key file does not exist. '
                 'This should not happen', self
             )
-
-    def __repr__(self):
-        return '{}(name={}, file={}, asn1_oid={})'.format(
-            self.__class__.__name__, self.name, self.key_file, self.asn1_oid
-        )

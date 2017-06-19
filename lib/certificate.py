@@ -2,11 +2,10 @@
 
 import os
 import logging
-import tempfile
+import shutil
 
 from .key import RSAKey
-from .util import openssl, keytool, run_command, mkdirs, get_class_logger
-
+from .util import openssl, keytool, run_command, mkdirs, get_class_logger, is_in_keystore
 
 subject_fields = ['C', 'ST', 'O', 'OU', 'DN', 'CN', 'L', 'SN', 'GN']
 
@@ -75,6 +74,7 @@ def render_csr_config(dns_alt_names=None):
         for i, name in enumerate(dns_alt_names):
             alt_names += dns_alt_name_template.format(i=i+1, alt_name=name) + '\n'
 
+
     content = csr_config_template.format(req_extensions=req_extensions)
     if dns_alt_names:
         content += san_config_template.format(alt_names=alt_names)
@@ -116,7 +116,17 @@ class Certificate(object):
         # TODO validate that digest is supported (e.g. sha256)
         self.digest = digest
 
-        # TODO Validate that ca is instanceof CA
+        # Verify that CA has required methods. ( duck typing :) )
+        if ca and (
+            not hasattr(ca, 'sign') or
+            not hasattr(ca, 'verify')
+            ):
+            raise RuntimeError(
+                'Cannot instante new Certificate. ca {} should implement '
+                'both sign and verify methods.'.format(ca),
+                self
+            )
+
         self.ca = ca
 
         self.read_only = read_only
@@ -143,41 +153,71 @@ class Certificate(object):
 
         self.log = get_class_logger(self)
 
-    def should_generate(self, path, force):
-        if os.path.exists(path) and not force:
+    # TODO: rename this since we are removing paths, and clean up conditional logic.
+    def should_generate(self, path=None, force=False):
+        should_generate = True
+        if self.read_only:
             self.log.warn(
-                '{} exists, skipping generation...'.format(path)
+                'Cannot call any generate method on a read_only Certificate.  Skipping generation.'
             )
-            return False
+            should_generate = False
+        elif path and os.path.exists(path):
+            if force:
+                self.log.warn(
+                    '{} exists, but force is True.  Removing before '
+                    'continuing with generation.'.format(path)
+                )
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                should_generate = True
+            else:
+                self.log.warn(
+                    '{} exists, skipping generation.'.format(path)
+                )
+                should_generate = False
         else:
-            return True
+            should_generate = True
+
+        return should_generate
 
     def generate(self, force=False):
-        if self.read_only:
-            raise RuntimeError('Cannot call generate on a read_only Certificate', self)
+        # This top level should_generate check looks for the existence of self.path.
+        # It will not even attempt to recreate the files if self.path exists and force=False.
+        if not self.should_generate(self.path, force):
+            return False
+
+        self.log.info('Generating all files...')
         mkdirs(self.path)
+
         self.key.generate(force=force)
         self.generate_crt(force=force)
         self.generate_p12(force=force)
         self.generate_keystore(force=force)
 
+        return True
+
     def generate_crt(self, force=False):
         if not self.should_generate(self.crt_file, force):
-            return # TODO return what?
+            return False
 
         # If we are going to include DNS alt names in the cert,
         # we'll need a CSR conf file that specifies them.  For consistency,
         # generate this conf file even if there are no DNS alt names specified.
-        self._generate_csr_conf()
+        self._generate_csr_conf(force=force)
 
         # If no ca was provided, then generate a self signed certificate
         if not self.ca:
-            self._self_generate_crt()
+            self._self_generate_crt(force=force)
         else:
-            self._ca_generate_crt()
+            self._ca_generate_crt(force=force)
 
 
-    def _self_generate_crt(self):
+    def _self_generate_crt(self, force=False):
+        if not self.should_generate(self.crt_file, force):
+            return False
+
         # Generate the certificate without a ca
         command = [
             openssl,
@@ -201,34 +241,42 @@ class Certificate(object):
             command += ['-extensions', 'v3_req']
 
         self.log.info('Generating self signed certificate')
-        if not run_command(command):
+        if not run_command(command, creates=self.crt_file):
             raise RuntimeError('Certificate generation failed', self)
-        # TODO verify that self.crt_file now exists
 
+        return True
 
-    def _ca_generate_crt(self):
+    def _ca_generate_crt(self, force=False):
+        if not self.should_generate(self.crt_file, force):
+            return False
+
+        self.generate_csr(force=force)
         self.log.info('Sending CSR to {}'.format(self.ca))
-
-        self.generate_csr()
         self.ca.sign(self)
 
+        # Verify that crt_file was created by the CA when it signed CSR.
+        if not os.path.exists(self.crt_file):
+            raise RuntimeError(
+                '{} does not exist even though {} signed and generated a '
+                'certificate.  This should not happen'.format(self.crt_file, self.ca)
+            )
+
         self.log.info('Verifying signed certificate with {}'.format(self.ca))
-        self.ca.verify(self.crt_file)
+        if not self.ca.verify(self):
+            raise RuntimeError('Certificate {} verification failed with {}'.format(
+                self.crt_file, self.ca
+            ))
 
+        return True
 
-    def _generate_csr_conf(self):
-        csr_config_content = render_csr_config(self.dns_alt_names)
-        with open(self.csr_conf_file, 'w') as f:
-            f.write(csr_config_content)
-            f.flush()
-        # TODO verify that that csr_conf_file is generated
+    def generate_csr(self, force=False):
+        if not self.should_generate(self.csr_file, force):
+            return False
 
-
-    def generate_csr(self):
         # In order to support adding SANs to the CSR,
         # we need to use a config file.  To be consistent, we generate
         # and use this config file, event if we don't have any SANS
-        self._generate_csr_conf()
+        self._generate_csr_conf(force=force)
 
         command = [
             openssl,
@@ -245,14 +293,31 @@ class Certificate(object):
             command += ['-passin', 'pass:{}'.format(self.key.password)]
 
         self.log.info('Generating CSR')
-        if not run_command(command):
+        if not run_command(command, creates=self.csr_file):
             raise RuntimeError('CSR generation failed', self)
-        # TODO check that csr_file exists
+
+        return True
+
+    def _generate_csr_conf(self, force=False):
+        if not self.should_generate(self.csr_conf_file, force):
+            return False
+
+        csr_config_content = render_csr_config(self.dns_alt_names)
+        with open(self.csr_conf_file, 'w') as f:
+            f.write(csr_config_content)
+            f.flush()
+        if not os.path.exists(self.csr_conf_file):
+            raise RuntimeError(
+                'Attempted to write CSR conf file {}, but it does not exist. '
+                'This should not happen.'.format(self.csr_conf_file),
+                self
+            )
+        return True
 
 
     def generate_p12(self, force=False):
         if not self.should_generate(self.p12_file, force):
-            return # TODO return what?
+            return False
 
         command = [
             openssl,
@@ -271,16 +336,29 @@ class Certificate(object):
             command += ['-passin', 'pass:{}'.format(self.key.password)]
 
         if self.ca:
-            command += ['-CAfile', self.ca.ca_crt.crt_file]
+            #  TODO: This will not work with PuppetCA!
+            command += ['-CAfile', self.ca.ca_cert.crt_file]
 
         self.log.info('Generating PKCS12 keystore')
-        if not run_command(command):
+        if not run_command(command, creates=self.p12_file):
             raise RuntimeError('PKCS12 file generation failed', self)
-        # TODO check that p12 file exists
+
+        # Verify that the cert is in the P12 file.
+        if not is_in_keystore(self.name, self.p12_file, self.password):
+            raise RuntimeError(
+                'Generation of PKS12 keystore succeeded, but a key for '
+                '{} is not in {}. This should not happen'.format(
+                    self.name, self.jks_file
+                )
+            )
+
+        # TODO: do we need to import the ca_cert into the PKS12 keystore too?
+
+        return True
 
     def generate_keystore(self, force=False):
         if not self.should_generate(self.jks_file, force):
-            return # TODO return what?
+            return False
 
         command = [
             keytool,
@@ -297,9 +375,19 @@ class Certificate(object):
             command += ['-srckeypass', self.key.password, '-destkeypass', self.key.password]
 
         self.log.info('Generating Java keystore')
-        if not run_command(command):
-            raise RuntimeError('Java Keystore generation and import of certificate failed', self)
-        # TODO check that jks file exists and has cert
+        if not run_command(command, creates=self.jks_file):
+            raise RuntimeError(
+                'Java Keystore generation and import of certificate failed', self
+            )
+
+        # Verify that the cert is in the Java Keystore.
+        if not is_in_keystore(self.name, self.jks_file, self.password):
+            raise RuntimeError(
+                'Java Keystore generation and import of certificate '
+                'succeeded, but a key for {} is not in {}.  This should not happen'.format(
+                    self.name, self.jks_file
+                )
+            )
 
         # If this certificate was signed by a CA, then also
         # import the CA certificate into the keystore.
@@ -308,18 +396,29 @@ class Certificate(object):
                 keytool,
                 '-importcert',
                 '-noprompt',
-                "-alias",     self.ca.ca_crt.name,
-                '-file', self.ca.ca_crt.crt_file,
+                "-alias",     self.ca.ca_cert.name,
+                '-file', self.ca.ca_cert.crt_file,
                 '-storepass', self.password,
                 '-keystore', self.jks_file
             ]
-            self.log.info('Importing CA cert {} into Java keystore'.format(self.ca))
+            self.log.info('Importing {} cert into Java keystore'.format(self.ca))
             if not run_command(command):
-                raise RuntimeError('Import of CA certificate into Java Keystore failed', self)
-            # TODO check that jks file exists and has CA cert
+                raise RuntimeError(
+                    'Import of {} cert into Java Keystore failed'.format(self.ca), self
+                )
+            # Verify that the ca_cert is in the Java Keystore.
+            if not is_in_keystore(self.ca.ca_cert.name, self.jks_file, self.password):
+                raise RuntimeError(
+                    'Import of {} certificate into Java Keystore succeeded, but a key for '
+                    '{} is not in {}. This should not happen'.format(
+                        self.ca, self.ca.cert.name, self.jks_file
+                    )
+                )
+
+        return True
 
     def __repr__(self):
-        return '{}(name={}, file={}, subject={}, key={}, ca={})'.format(
-            self.__class__.__name__, self.name, self.crt_file,
-            self.subject.openssl_string(), self.key.key_file, self.ca.name
+        return '{}(name={}, keytype={}, ca={})'.format(
+            self.__class__.__name__, self.name,
+            self.key.__class__.__name__, self.ca.name
         )

@@ -29,7 +29,7 @@ def setup_logging(level=None):
 
     logging.basicConfig(
         level=level,
-        format='%(asctime)s %(levelname)-8s %(name)-20s %(message)s'
+        format='%(asctime)s %(levelname)-8s %(name)-22s %(message)s'
     )
 
 # TODO don't call this from file
@@ -53,7 +53,7 @@ def get_class_logger(obj):
         logger_name = class_name
     return logging.getLogger(logger_name)
 
-def run_command(command):
+def run_command(command, creates=None):
     """
     Executes a command in a subshell and logs the output.
 
@@ -68,11 +68,26 @@ def run_command(command):
         logger.debug("Running command: " + " ".join(command))
         output = subprocess.check_output(command, stderr=subprocess.STDOUT)
         for ln in output.splitlines(): logger.debug(ln)
-        logger.debug("command succeeded: %s", " ".join(command))
+
+        # Ensure that any files that this command should have created exist.
+        if creates:
+            if isinstance(creates, str):
+                creates = [creates]
+            for f in creates:
+                if not os.path.exists(f):
+                    logger.error(
+                        'command succeeded, but was expected to create file {} '
+                        'and it does not exist. command: {}'.format(f, ' '.join(command))
+                    )
+                    return False
+
     except subprocess.CalledProcessError as e:
         for ln in e.output.splitlines(): logging.error(ln)
         logger.error("command returned status %d: %s", e.returncode, " ".join(command))
         return False
+
+
+    logger.debug("command succeeded: %s", " ".join(command))
     return True
 
 
@@ -84,3 +99,13 @@ def mkdirs(directory):
     """
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+def is_in_keystore(alias, jks_file, password):
+    command = [
+        keytool,
+        '-list',
+        '-alias', alias,
+        '-storepass', password,
+        '-keystore', jks_file
+    ]
+    return run_command(command)

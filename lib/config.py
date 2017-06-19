@@ -10,6 +10,7 @@ from .certificate import *
 from .key import *
 from .ca import *
 
+# TODO: use relative paths in config???
 
 default_config = {
     'authorities': {},
@@ -67,13 +68,6 @@ def instantiate(class_name, **kwargs):
     return get_class(class_name)(**kwargs)
 
 
-#
-# def instantiate_key(key_config):
-#     return get_class(key_config['type'])(**key_config)
-#
-# def instantiate_authority(authority_config):
-#     return get_class(authority_config['type'])(**authority_config)
-
 def instantiate_cert(cert_config, authorities={}):
 
     # If we have a special config for this key (that is not the default RSAKey)
@@ -119,6 +113,7 @@ def instantiate_authorities(authorities_config):
     for name, ca_config in authorities_config.items():
         ca_config['name'] = name
 
+        print(ca_config)
         # Instantiate the CA cert for this CA IF it has one
         if 'cert' in ca_config:
             ca_cert_config = ca_config['cert']
@@ -139,6 +134,9 @@ def instantiate_all(config):
         'authorities': authorities,
         'certificates': certificates
     }
+
+
+
 
 def validate(config):
     pass
