@@ -51,6 +51,12 @@ def instantiate_manifest(manifest):
     """
     Given a certificate maniest dict object (usually loaded from a yaml file), containing
     definitions of certificates and CAs to manage, instantiate them into objects.
+
+    :param manifest manifest of all authority and certificate configs.  CAs, Certificate, and Key
+                    classes will all be instantiated based on this configuration and returned.
+
+    :return dict    of the form { 'authorities': {...}, 'certificates': {...} }, where each
+                    declared CA and Certificate will be keyed by name in the appropriate dict.
     """
     authorities = instantiate_authorities(manifest['authorities'])
     certificates = instantiate_certs(manifest['certs'], authorities)
@@ -64,6 +70,16 @@ def instantiate_manifest(manifest):
 
 def instantiate_cert(cert_config, authorities={}):
     """
+    Given a cert config manifest, instantiate the Certificate class and return it.
+    If this cert has a CA configured, that CA should already be instantiated in
+    the authorities hash, keyed by the CA named in the cert_config.
+
+    :param certs_manifest   cert manifest config keyed by name to instantiate.
+                            Make sure that cert_config['name'] is set.
+    :param authorities      dict of CA instances keyed by ca name.
+
+
+    :return Certificate
     """
     # If we have a special config for this key (that is not the default RSAKey)
     # that Certificate will generate if not given a key, then we need to
@@ -91,8 +107,21 @@ def instantiate_cert(cert_config, authorities={}):
     return Certificate(**cert_config)
 
 def instantiate_certs(certs_manifest, authorities):
+    """
+    This will return a dict of Certficate instances keyed by name
+    representing all of the certs declared in certs_manifest.
+    If a cert declares a ca, make sure that a CA instance exists
+    in the authorities dict, keyed by the same name as the ca
+    that the cert config specifies.
+
+    :param certs_manifest   dict of cert manifest config keyed by name to instantiate.
+    :param authorities      dict of CA instances keyed by ca name.
+
+    :return dict            dict of Certificate instances keyed by name.
+    """
     certs = {}
     for name, cert_config in certs_manifest.items():
+        # Set cert_config['name'] to this manifest cert key name.
         cert_config['name'] = name
 
         cert = instantiate_cert(cert_config, authorities)
@@ -102,6 +131,12 @@ def instantiate_certs(certs_manifest, authorities):
 
 #  TODO change param to authority_config
 def instantiate_authorities(authorities_manifest):
+    """
+    Given a manifest of authority config, this will instantiate each as a CA instance.
+
+    :param authorities_manifest dict of CA config keyed by CA name.
+    :return dict                dict of CA instances keyed by name.
+    """
     authorities = {}
     # TODO: s/ca_config/authority_config?
     for name, ca_config in authorities_manifest.items():
